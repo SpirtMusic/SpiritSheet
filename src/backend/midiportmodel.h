@@ -8,6 +8,8 @@
 class MidiPortModel : public QAbstractListModel
 {
     Q_OBJECT
+    Q_PROPERTY(int rowCount READ rowCount NOTIFY rowCountChanged)
+
 public:
 
     explicit MidiPortModel(QObject *parent = nullptr);
@@ -23,6 +25,7 @@ public:
     void clear();
 signals:
     void countChanged();
+    void rowCountChanged();
 private:
     struct PortInfo {
         QString name;

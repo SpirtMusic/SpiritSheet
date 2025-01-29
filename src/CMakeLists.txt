@@ -39,6 +39,9 @@ qt_add_qml_module(appSpiritSheet
     SOURCES backend/midiportmodel.cpp backend/midiportmodel.h
     SOURCES utils/pageImageProvider.cpp utils/pageImageProvider.h utils/pdfModel.cpp utils/pdfModel.h
     QML_FILES contents/ui/components/PDFView.qml
+    QML_FILES contents/ui/settings/GeneralPage.qml
+    QML_FILES contents/ui/settings/MidiPage.qml
+    SOURCES utils/settings.h utils/settings.cpp
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.

@@ -11,7 +11,11 @@ ListView {
     property int count: poppler.pages.length
     property int currentPage: currentIndex
     property color searchHighlightColor: Qt.rgba(1, 1, .2, .4)
-
+    property real dragStartX: 0
+    property real dragThreshold: width * 0.2 // 20% of width for swipe threshold
+    property bool isDragging: false
+    property bool isAnimating: false
+    property real targetX: 0
     // View mode properties
     property int viewMode: root.viewMode
     property bool isHorizontal: viewMode > 0
@@ -24,8 +28,9 @@ ListView {
     orientation: isHorizontal ? ListView.Horizontal : ListView.Vertical
     cacheBuffer: isHorizontal ? width * 2 : height * 2
     pixelAligned: true
-    flickableDirection: isHorizontal ? Flickable.HorizontalFlick : Flickable.VerticalFlick
-    boundsBehavior: Flickable.StopAtBounds
+  flickableDirection: Flickable.VerticalFlick  // Only allow vertical flicking
+interactive: !isHorizontal  // Disable ListView's default interaction in horizontal mode
+boundsBehavior: isHorizontal ? Flickable.StopAtBounds : Flickable.DragAndOvershootBounds
     model: poppler.loaded ? (isBookMode ? Math.ceil(poppler.pages.length / 2) : poppler.pages.length) : 0
     //reuseItems: true
     displayMarginBeginning: isHorizontal ? width : height
@@ -304,46 +309,42 @@ ListView {
     }
     // Navigation functions
     function goToNextPage() {
-        if (currentIndex < count - 1) {
-            if (isHorizontal) {
-                currentIndex = currentIndex + 1
-                contentX = currentIndex * width
-            } else {
-                animatingScroll = true
-                var nextY = contentY + height
-                contentYAnimation.to = nextY
-                contentYAnimation.start()
-                currentIndex = currentIndex + 1
-            }
-        }
-    }
+         if (currentIndex < count - 1) {
+             if (isHorizontal) {
+                 currentIndex = currentIndex + 1
+                 contentX = currentIndex * width
+             } else {
+                 currentIndex = currentIndex + 1
+                 contentY += height
+             }
+         }
+     }
+
 
     function goToPreviousPage() {
-        if (currentIndex > 0) {
-            if (isHorizontal) {
-                currentIndex = currentIndex - 1
-                contentX = currentIndex * width
-            } else {
-                animatingScroll = true
-                var prevY = contentY - height
-                contentYAnimation.to = prevY
-                contentYAnimation.start()
-                currentIndex = currentIndex - 1
-            }
-        }
-    }
-    function positionViewAtIndex(index, mode) {
-        if (index < 0 || index >= count) return
+         if (currentIndex > 0) {
+             if (isHorizontal) {
+                 currentIndex = currentIndex - 1
+                 contentX = currentIndex * width
+             } else {
+                 currentIndex = currentIndex - 1
+                 contentY -= height
+             }
+         }
+     }
 
-        currentIndex = index
-        if (isHorizontal) {
-            contentX = index * width
-        } else {
-            animatingScroll = true
-            contentYAnimation.to = index * (height + spacing)
-            contentYAnimation.start()
-        }
-    }
+    function positionViewAtIndex(index, mode) {
+           if (index < 0 || index >= count) return
+
+           currentIndex = index
+           if (isHorizontal) {
+               contentX = index * width
+           } else {
+               contentY = index * (height + spacing)
+           }
+       }
+
+
 
     function goToPage(pageNumber) {
         var targetIndex = isBookMode ? Math.floor(pageNumber / 2) : pageNumber
@@ -358,12 +359,67 @@ ListView {
             currentPage = currentIndex
         }
     }
-    NumberAnimation {
-        id: contentYAnimation
-        target: pagesView
-        property: "contentY"
-        duration: scrollDuration
-        easing.type: Easing.OutCubic
-        //onFinished: animatingScroll = false
+    Behavior on contentX {
+        enabled: isHorizontal
+        SmoothedAnimation {
+            duration: 200
+            easing.type: Easing.OutCubic
+        }
     }
+
+    Behavior on contentY {
+        enabled: !isHorizontal
+        SmoothedAnimation {
+            duration: scrollDuration
+            easing.type: Easing.OutCubic
+        }
+    }
+    MouseArea {
+           anchors.fill: parent
+           enabled: isHorizontal
+           z: 1000
+           preventStealing: true
+           propagateComposedEvents: false
+
+           onPressed: {
+               dragStartX = mouseX
+               isDragging = true
+               mouse.accepted = true
+           }
+
+           onPositionChanged: {
+               if (!isDragging || !isHorizontal) return
+               mouse.accepted = true
+
+               var delta = mouseX - dragStartX
+               var newX = pagesView.contentX - delta
+
+               // Constrain movemen
+               if (newX < 0 || newX > (count - 1) * width) {
+                   newX = pagesView.contentX - (delta * 0.3)
+               }
+
+               pagesView.contentX = newX
+           }
+
+           onReleased: {
+               if (!isDragging || !isHorizontal) return
+               isDragging = false
+               mouse.accepted = true
+
+               var delta = mouseX - dragStartX
+               var targetPage = currentIndex
+
+               if (Math.abs(delta) > dragThreshold) {
+                   if (delta > 0 && currentIndex > 0) {
+                       targetPage = currentIndex - 1
+                   } else if (delta < 0 && currentIndex < count - 1) {
+                       targetPage = currentIndex + 1
+                   }
+               }
+
+               contentX = targetPage * width
+               currentIndex = targetPage
+           }
+       }
 }

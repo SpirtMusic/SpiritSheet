@@ -5,6 +5,7 @@ import QtQuick.Controls as QQC2
 import QtQuick.Dialogs
 import org.kde.kirigami as Kirigami
 import org.kde.kirigamiaddons.components as KirigamiAddons
+import org.kde.kirigamiaddons.settings as KirigamiSettings
 import "components"
 
 Kirigami.ApplicationWindow {
@@ -20,10 +21,10 @@ Kirigami.ApplicationWindow {
         id: mainPage
         padding: 0
         actions: [
-            // File Operations
             Kirigami.Action {
                 icon.name: "configure"
-                text: i18n("Midi Settings")
+                text: i18n("Settings")
+                onTriggered: settingsView.open()
             }
         ]
         // PDF View
@@ -329,5 +330,41 @@ Kirigami.ApplicationWindow {
         target : midiClient
         function onGoToNextPage(){
         }
+    }
+    KirigamiSettings.ConfigurationView {
+        id: settingsView
+
+        window: root
+
+        title: i18n("Settings")
+
+        modules: [
+            KirigamiSettings.ConfigurationModule {
+                moduleId: "general"
+                text: i18n("General")
+                icon.name: "configure"
+                page: () => Qt.createComponent("settings/GeneralPage.qml")
+            },
+            KirigamiSettings.ConfigurationModule {
+                moduleId: "midi"
+                text: i18n("MIDI Configuration")
+                icon.name: "audio-midi"
+                page: () => Qt.createComponent("settings/MidiPage.qml")
+            },
+            KirigamiSettings.ConfigurationModule {
+                moduleId: "about"
+                text: i18n("About PDF Viewer")
+                icon.name: "help-about"
+                page: () => Qt.createComponent("org.kde.kirigamiaddons.formcard", "AboutPage")
+                category: i18nc("@title:group", "About")
+            }
+            // KirigamiSettings.ConfigurationModule {
+            //     moduleId: "aboutkde"
+            //     text: i18n("About KDE")
+            //     icon.name: "kde"
+            //     page: () => Qt.createComponent("org.kde.kirigamiaddons.formcard", "AboutKDE")
+            //     category: i18nc("@title:group", "About")
+            // }
+        ]
     }
 }

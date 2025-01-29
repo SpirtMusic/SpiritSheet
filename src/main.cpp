@@ -11,7 +11,7 @@
 
 #include <backend/midiclient.h>
 #include <utils/pdfModel.h>
-
+#include <utils/settings.h>
 
 int main(int argc, char *argv[])
 {
@@ -34,8 +34,9 @@ int main(int argc, char *argv[])
     QQmlApplicationEngine engine;
 
     MidiClient *midiClient = new MidiClient();
+    Settings *settings = new Settings();
     engine.rootContext()->setContextProperty("midiClient", midiClient);
-
+    engine.rootContext()->setContextProperty("settings", settings);
     qmlRegisterType<PdfModel>("com.SpiritMusic.Poppler", 1, 0, "Poppler");
 
     engine.rootContext()->setContextObject(new KLocalizedContext(&engine));
@@ -47,7 +48,7 @@ int main(int argc, char *argv[])
                 []() { QCoreApplication::exit(-1); },
     Qt::QueuedConnection);
     engine.load(url);
-//    engine.loadFromModule("SpiritSheet", "Main");
+    //    engine.loadFromModule("SpiritSheet", "Main");
 
     return app.exec();
 }

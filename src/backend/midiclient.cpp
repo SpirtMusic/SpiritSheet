@@ -1,7 +1,11 @@
 #include "midiclient.h"
 
 MidiClient::MidiClient(QObject *parent)
-    : QObject(parent), m_bankNumber(0)  {
+    : QObject(parent)
+    , m_bankNumber(0)
+    , m_inputPorts(new MidiPortModel(this))    // Initialize here
+    , m_outputPorts(new MidiPortModel(this))   // Initialize here
+{
     jackClient = new JackClient;
     connect(jackClient, &JackClient::midiMessageReceived, this, &MidiClient::handleMidiMessage);
     getIOPorts();
@@ -12,60 +16,26 @@ MidiClient::MidiClient(QObject *parent)
 }
 void MidiClient::handleMidiMessage(const libremidi::message& message)
 {
-    // Handle the received MIDI message here
-    // e.g., update UI, process the message, etc.
-    qDebug()<< message;
-    int bankNumber = 0;
-    if (isGenosRegistrationBankChange(message, bankNumber)) {
-        qDebug() << "Received registration bank change for bank" << bankNumber;
-        setBankNumber(bankNumber);
-    }
-
-    if(itsVolumeCC(message))
-    {
+    if (!message.empty()) {
         int statusByte = message[0];
         int channel = statusByte & 0x0F; // Mask the lowest 4 bits
-        int midivolume=message[2];
-        int volume=( midivolume * 100) / 127;
-        if(channel==15){
-            qDebug()<<"SEND MIDI VOLUME "<<volume;
-        }
-    }
-    if(isNextPagesCC(message))
-    {
-        int statusByte = message[0];
-        int channel = statusByte & 0x0F; // Mask the lowest 4 bits
-        if(channel==15){
-            qDebug()<<"Next Pages MIDI ";
-            emit goToNextPage();
-        }
-    }
-    if(!itsVolumeCC(message)){
-        // jackClient->midiout_raw->send_message(message);
-    }
-    if (itsNote(message)) {
 
-        // Extract the note and velocity from the message
-        int note = message[1];
-        int velocity = message[2];
-        // Check if the message is a note-off
-        int statusByte = message[0];
-        int channel = statusByte & 0x0F; // Mask the lowest 4 bits
-        int messageType = statusByte & 0xF0; // Mask the highest 4 bits
-        if (messageType == 0x80) {
-            // It's a note-off message, send note-off with velocity 0
-            velocity = 0;
+        // Emit the MIDI message for monitoring
+        if (message.size() >= 3) {
+            emit midiMessageReceived(channel, message[1], message[2]);
         }
 
-        if(channel == 0){
-            emit channelActivated(0);
-
-        }
-        else if(channel == 1){
-        }
-        else if(channel == 2){
-
-            emit channelActivated(2);
+        // Check if message is on our configured MIDI channel
+        if (channel == m_midiChannel) {
+            // Handle next/previous page controls
+            if (isNextPagesCC(message)) {
+                qDebug() << "Next Page MIDI Control received";
+                emit goToNextPage();
+            }
+            else if (isPrevPagesCC(message)) {
+                qDebug() << "Previous Page MIDI Control received";
+                emit goToPreviousPage();
+            }
         }
     }
 }
@@ -123,28 +93,32 @@ void MidiClient::sendMsbLsbPc(int channel, int msb, int lsb, int pc)
     qDebug() << "Sent MSB:" << msb << "LSB:" << lsb << "PC:" << pc<< "on channel:" << channel;
 }
 
-void MidiClient::getIOPorts(){
-
-    if (jackClient->observer.has_value()) { // Check if optional has a value
+void MidiClient::getIOPorts()
+{
+            qDebug() << "tttttttttttttttttttt";
+    if (jackClient->observer.has_value()) {
+        qDebug() << "Clearing input ports";
         m_inputPorts->clear();
-        libremidi::observer& obs = jackClient->observer.value(); // Dereference optional to get the underlying libremidi::observer object
+        libremidi::observer& obs = jackClient->observer.value();
         for(const libremidi::input_port& port : obs.get_input_ports()) {
-            //qDebug()<< port.port_name;
-            //   jackClient->midiin->open_port(port,"In");
-            m_inputPorts->addPort(QString::fromStdString(port.port_name), QVariant::fromValue(port));
+            QString portName = QString::fromStdString(port.port_name);
+            qDebug() << "Adding input port:" << portName;
+            m_inputPorts->addPort(portName, QVariant::fromValue(port));
         }
     }
-    if (jackClient->observer.has_value()) { // Check if optional has a value
-        m_outputPorts->clear();
-        libremidi::observer& obs = jackClient->observer.value(); // Dereference optional to get the underlying libremidi::observer object
-        for(const libremidi::output_port& port : obs.get_output_ports()) {
-            //  qDebug()<< port.port_name;
-            m_outputPorts->addPort(QString::fromStdString(port.port_name), QVariant::fromValue(port));
-            //   jackClient->midiout->open_port(port,"Out");
 
+    if (jackClient->observer.has_value()) {
+        qDebug() << "Clearing output ports";
+        m_outputPorts->clear();
+        libremidi::observer& obs = jackClient->observer.value();
+        for(const libremidi::output_port& port : obs.get_output_ports()) {
+            QString portName = QString::fromStdString(port.port_name);
+            qDebug() << "Adding output port:" << portName;
+            m_outputPorts->addPort(portName, QVariant::fromValue(port));
         }
     }
 }
+
 
 void MidiClient::makeConnection(QVariant inputPorts,QVariant outputPorts){
 
@@ -229,14 +203,27 @@ bool MidiClient::isNextPagesCC(const libremidi::message& message)
 {
     if (!message.empty()) {
         int statusByte = message[0];
+        int messageType = statusByte & 0xF0;
+
+        if (messageType == 0xB0 && message.size() > 1) {
+            int controlNumber = message[1];
+            return (controlNumber == m_nextPageControl);  // Use the property
+        }
+    }
+    return false;
+}
+bool MidiClient::isPrevPagesCC(const libremidi::message& message)
+{
+    if (!message.empty()) {
+        int statusByte = message[0];
         int messageType = statusByte & 0xF0; // Mask the highest 4 bits
 
         // Check if the message is a Control Change (CC) message
         if (messageType == 0xB0 && message.size() > 1) {
             int controlNumber = message[1]; // The second byte is the control number
 
-            // Check if the control number is 7 (which is the standard for volume)
-            return (controlNumber == 64);
+            // Check if the control number matches our prevPageControl setting
+            return (controlNumber == m_prevPageControl);
         }
     }
 
@@ -310,5 +297,36 @@ void MidiClient::setBankNumber(int newBankNumber)
     if (m_bankNumber != newBankNumber) {
         m_bankNumber = newBankNumber;
         emit bankNumberChanged(m_bankNumber);  // Emit signal when the bankNumber changes
+    }
+}
+void MidiClient::setMidiChannel(int channel)
+{
+    if (m_midiChannel != channel) {
+        m_midiChannel = channel;
+        emit midiChannelChanged(channel);
+    }
+}
+
+void MidiClient::setNextPageControl(int control)
+{
+    if (m_nextPageControl != control) {
+        m_nextPageControl = control;
+        emit nextPageControlChanged(control);
+    }
+}
+
+void MidiClient::setPrevPageControl(int control)
+{
+    if (m_prevPageControl != control) {
+        m_prevPageControl = control;
+        emit prevPageControlChanged(control);
+    }
+}
+
+void MidiClient::setCurrentMidiDevice(const QString &device)
+{
+    if (m_currentMidiDevice != device) {
+        m_currentMidiDevice = device;
+        emit currentMidiDeviceChanged(device);
     }
 }
