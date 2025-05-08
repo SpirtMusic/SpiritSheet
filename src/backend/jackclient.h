@@ -24,11 +24,15 @@ signals:
     void midiMessageReceived(const libremidi::message& message);
 public slots:
     void sendMidiMessage(int port, const libremidi::message& message);
+    void send_MidiMessage(const libremidi::message message);
 private:
     libremidi::unique_handle<jack_client_t, jack_client_close> handle;
 
     libremidi::jack_callback midiin_callback;
     libremidi::jack_callback midiout_callback;
+
+
+
 };
 
 #endif // JACKCLIENT_H
