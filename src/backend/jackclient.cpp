@@ -61,13 +61,13 @@ midiin = std::make_unique<libremidi::midi_in>(
             },
             api_input_config
             );
-midiin->open_virtual_port("Input: 1");
+midiin->open_virtual_port("In");
 
 midiout = std::make_unique<libremidi::midi_out>(
             libremidi::output_configuration{},
             api_output_config
             );
-midiout->open_virtual_port("Output: 1");
+midiout->open_virtual_port("Out");
 }
 
 int JackClient::jack_callback(jack_nframes_t cnt, void *ctx)

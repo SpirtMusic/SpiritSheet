@@ -16,17 +16,19 @@ MidiClient::MidiClient(QObject *parent)
 }
 void MidiClient::handleMidiMessage(const libremidi::message& message)
 {
+    qDebug() << "MIDI Control received";
     if (!message.empty()) {
+        qDebug() << "MIDI Control received 1 ";
         int statusByte = message[0];
         int channel = statusByte & 0x0F; // Mask the lowest 4 bits
 
         // Emit the MIDI message for monitoring
         if (message.size() >= 3) {
-            emit midiMessageReceived(channel, message[1], message[2]);
+            emit midiMessageReceived(channel + 1 , message[1], message[2]);
         }
-
         // Check if message is on our configured MIDI channel
-        if (channel == m_midiChannel) {
+        if (channel + 1  == m_midiChannel) {
+
             // Handle next/previous page controls
             if (isNextPagesCC(message)) {
                 qDebug() << "Next Page MIDI Control received";
@@ -93,9 +95,7 @@ void MidiClient::sendMsbLsbPc(int channel, int msb, int lsb, int pc)
     qDebug() << "Sent MSB:" << msb << "LSB:" << lsb << "PC:" << pc<< "on channel:" << channel;
 }
 
-void MidiClient::getIOPorts()
-{
-            qDebug() << "tttttttttttttttttttt";
+void MidiClient::getIOPorts() {
     if (jackClient->observer.has_value()) {
         qDebug() << "Clearing input ports";
         m_inputPorts->clear();
@@ -103,62 +103,60 @@ void MidiClient::getIOPorts()
         for(const libremidi::input_port& port : obs.get_input_ports()) {
             QString portName = QString::fromStdString(port.port_name);
             qDebug() << "Adding input port:" << portName;
+            // Store the actual port object
             m_inputPorts->addPort(portName, QVariant::fromValue(port));
         }
     }
+}
 
-    if (jackClient->observer.has_value()) {
-        qDebug() << "Clearing output ports";
-        m_outputPorts->clear();
-        libremidi::observer& obs = jackClient->observer.value();
-        for(const libremidi::output_port& port : obs.get_output_ports()) {
-            QString portName = QString::fromStdString(port.port_name);
-            qDebug() << "Adding output port:" << portName;
-            m_outputPorts->addPort(portName, QVariant::fromValue(port));
+
+void MidiClient::makeConnection(QVariant inputPort, QVariant outputPort) {
+    try {
+        // Close any existing connections first
+        if (jackClient->midiin) {
+            jackClient->midiin->close_port();
         }
+
+        // Connect to the input port if provided
+        if (inputPort.isValid() && inputPort.canConvert<libremidi::input_port>()) {
+            try {
+                libremidi::input_port selectedInputPort = inputPort.value<libremidi::input_port>();
+                jackClient->midiin->open_port(selectedInputPort, "In");
+                qDebug() << "Input port connected successfully";
+            } catch (const std::exception& e) {
+                qWarning() << "Error connecting to input port:" << e.what();
+            }
+        } else {
+            qDebug() << "Invalid input port or cannot convert port data";
+        }
+
+        emit connectionStatusChanged();  // Use the new signal name
+    } catch (const std::exception& e) {
+        qWarning() << "Error making MIDI connection:" << e.what();
     }
 }
 
-
-void MidiClient::makeConnection(QVariant inputPorts,QVariant outputPorts){
-
-    if (inputPorts.isValid()) {
+void MidiClient::makeDisconnect() {
+    if (jackClient->midiin) {
         jackClient->midiin->close_port();
-        libremidi::input_port selectedInputPort = qvariant_cast<libremidi::input_port>(inputPorts);
-        jackClient->midiin->open_port(selectedInputPort,"In");
     }
-    else {
-        // Handle case when no port is selected
-        qDebug() << "No input port selected.";
-    }
-    // Use the selected ports as needed
-    if (outputPorts.isValid()) {
-        jackClient->midiout->close_port();
-        libremidi::output_port selectedOutputPort = qvariant_cast<libremidi::output_port>(outputPorts);
-        jackClient->midiout->open_port(selectedOutputPort,"Out");
-    }
-    else {
-        // Handle case when no port is selected
-        qDebug() << "No output port selected.";
-    }
-
-    emit outputPortConnectionChanged();
-}
-
-void MidiClient::makeDisconnect(){
-    jackClient->midiin->close_port();
-    jackClient->midiout->close_port();
 
     // Handle case when no port is selected
-    emit outputPortConnectionChanged();
+    emit connectionStatusChanged();  // Use the new signal name
     qDebug() << "Disconnected";
-
 }
-void MidiClient::checkOutputPortConnection(){
-    bool currentStatus = isOutputPortConnected();
-    if (currentStatus != m_lastOutputPortStatus) {
-        m_lastOutputPortStatus = currentStatus;
-        emit outputPortConnectionChanged();
+void MidiClient::checkOutputPortConnection() {
+    // Rename this to checkConnectionStatus()
+    bool currentInputStatus = isInputPortConnected();
+    bool currentOutputStatus = isOutputPortConnected();
+
+    if (currentInputStatus != m_lastInputPortStatus ||
+        currentOutputStatus != m_lastOutputPortStatus) {
+
+        m_lastInputPortStatus = currentInputStatus;
+        m_lastOutputPortStatus = currentOutputStatus;
+
+        emit connectionStatusChanged();  // Use the new signal name
     }
 }
 
@@ -205,7 +203,9 @@ bool MidiClient::isNextPagesCC(const libremidi::message& message)
         int statusByte = message[0];
         int messageType = statusByte & 0xF0;
 
+
         if (messageType == 0xB0 && message.size() > 1) {
+
             int controlNumber = message[1];
             return (controlNumber == m_nextPageControl);  // Use the property
         }

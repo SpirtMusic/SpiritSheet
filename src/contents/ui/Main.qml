@@ -329,6 +329,10 @@ Kirigami.ApplicationWindow {
     Connections{
         target : midiClient
         function onGoToNextPage(){
+            pdfView.goToNextPage()
+        }
+        function onGoToPreviousPage(){
+            pdfView.goToPreviousPage()
         }
     }
     KirigamiSettings.ConfigurationView {
@@ -366,5 +370,14 @@ Kirigami.ApplicationWindow {
             //     category: i18nc("@title:group", "About")
             // }
         ]
+    }
+    Component.onCompleted:{
+
+        midiClient.midiChannel = settings.midiChannel
+
+        midiClient.nextPageControl = settings.nextPageControl
+
+        midiClient.prevPageControl = settings.prevPageControl
+
     }
 }

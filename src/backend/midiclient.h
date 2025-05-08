@@ -12,7 +12,8 @@ class MidiClient  : public QObject
     Q_OBJECT
     Q_PROPERTY(MidiPortModel* inputPorts READ inputPorts CONSTANT)
     Q_PROPERTY(MidiPortModel* outputPorts READ outputPorts CONSTANT)
-    Q_PROPERTY(bool isOutputPortConnected READ isOutputPortConnected NOTIFY outputPortConnectionChanged)
+    Q_PROPERTY(bool isOutputPortConnected READ isOutputPortConnected NOTIFY connectionStatusChanged)
+    Q_PROPERTY(bool isInputPortConnected READ isInputPortConnected NOTIFY connectionStatusChanged)
     Q_PROPERTY(bool cc READ cc WRITE setCc NOTIFY ccChanged)
     Q_PROPERTY(bool pc READ pc WRITE setPc NOTIFY pcChanged)
 
@@ -32,6 +33,9 @@ public:
     bool isOutputPortConnected() const {
         return jackClient && jackClient->midiout && jackClient->midiout->is_port_connected();
     }
+    bool isInputPortConnected() const {
+         return jackClient && jackClient->midiin && jackClient->midiin->is_port_connected();
+     }
     bool cc() const;
     bool pc() const;
     int bankNumber() const;
@@ -52,7 +56,7 @@ public:
 
 
 signals:
-    void outputPortConnectionChanged();
+   void connectionStatusChanged();
     void channelActivated(int channel);
     void ccChanged();
     void pcChanged();
@@ -98,9 +102,9 @@ private:
         bool isPrevPagesCC(const libremidi::message& message);
     bool isGenosRegistrationBankChange(const libremidi::message& message, int& bankNumber);
     QString noteNumberToName(int noteNumber) const;
-
     MidiPortModel *m_inputPorts;
     MidiPortModel *m_outputPorts;
+    bool m_lastInputPortStatus = false;
     bool m_lastOutputPortStatus = false;
     bool m_cc;
     bool m_pc;

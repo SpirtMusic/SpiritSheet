@@ -36,7 +36,7 @@ QHash<int, QByteArray> MidiPortModel::roleNames() const
 
 void MidiPortModel::addPort(const QString &name, const QVariant &port)
 {
-    if (!name.startsWith("VSpiritMusic", Qt::CaseInsensitive))
+    if (!name.startsWith("SpiritSheet", Qt::CaseInsensitive))
     {
         beginInsertRows(QModelIndex(), m_ports.size(), m_ports.size());
         m_ports.append({name, port});
